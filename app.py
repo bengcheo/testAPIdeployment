@@ -1,100 +1,288 @@
-from flask import Flask, render_template, request, redirect, url_for
-import numpy as np
-from scipy.optimize import minimize
-import matplotlib.pyplot as plt
-import io
-import base64
-import time
+from flask import Flask, render_template, jsonify
+import random
+from datetime import datetime
 
 app = Flask(__name__)
 
-# Fonction pour calculer D_AB
-def calculate_D_AB(Xa, a_AB, a_BA, λ_a, λ_b, q_a, q_b, D_AB0, D_BA0, T):
-    Xb = 1 - Xa  # Fraction molaire de B
-    D = Xa*(D_BA0) + Xb*np.log(D_AB0) + \
-        2*(Xa*np.log(Xa+(Xb*λ_b)/λ_a)+Xb*np.log(Xb+(Xa*λ_a)/λ_b)) + \
-        2*Xa*Xb*((λ_a/(Xa*λ_a+Xb*λ_b))*(1-(λ_a/λ_b)) +
-                 (λ_b/(Xa*λ_a+Xb*λ_b))*(1-(λ_b/λ_a))) + \
-        Xb*q_a*((1-((Xb*q_b*np.exp(-a_BA/T))/(Xa*q_a+Xb*q_b*np.exp(-a_BA/T)))**2)*(-a_BA/T)+(1-((Xb*q_b)/(Xb*q_b+Xa*q_a*np.exp(-a_AB/T)))**2)*np.exp(-a_AB/T)*(-a_AB/T)) + \
-        Xa*q_b*((1-((Xa*q_a*np.exp(-a_AB/T))/(Xa*q_a*np.exp(-a_AB/T)+Xb*q_b))**2)*(-a_AB/T)+(1-((Xa*q_a)/(Xa*q_a+Xb*q_b*np.exp(-a_BA/T)))**2)*np.exp(-a_BA/T)*(-a_BA/T))
-    # Calcul de D_AB
-    return np.exp(D)
+# Collection of motivational quotes
+QUOTES = [
+    {"text": "The only way to do great work is to love what you do.", "author": "Steve Jobs"},
+    {"text": "Innovation distinguishes between a leader and a follower.", "author": "Steve Jobs"},
+    {"text": "Life is what happens to you while you're busy making other plans.", "author": "John Lennon"},
+    {"text": "The future belongs to those who believe in the beauty of their dreams.", "author": "Eleanor Roosevelt"},
+    {"text": "It is during our darkest moments that we must focus to see the light.", "author": "Aristotle"},
+    {"text": "The only impossible journey is the one you never begin.", "author": "Tony Robbins"},
+    {"text": "In the end, we will remember not the words of our enemies, but the silence of our friends.",
+     "author": "Martin Luther King Jr."},
+    {"text": "The way to get started is to quit talking and begin doing.", "author": "Walt Disney"},
+    {"text": "Don't let yesterday take up too much of today.", "author": "Will Rogers"},
+    {"text": "You learn more from failure than from success. Don't let it stop you. Failure builds character.",
+     "author": "Unknown"},
+    {
+        "text": "If you are working on something that you really care about, you don't have to be pushed. The vision pulls you.",
+        "author": "Steve Jobs"},
+    {"text": "Success is not final, failure is not fatal: it is the courage to continue that counts.",
+     "author": "Winston Churchill"},
+    {"text": "The only person you are destined to become is the person you decide to be.",
+     "author": "Ralph Waldo Emerson"},
+    {"text": "Your time is limited, so don't waste it living someone else's life.", "author": "Steve Jobs"},
+    {"text": "Believe you can and you're halfway there.", "author": "Theodore Roosevelt"},
+    {
+        "text": "The only thing standing between you and your goal is the story you keep telling yourself as to why you can't achieve it.",
+        "author": "Jordan Belfort"},
+    {"text": "Don't be afraid to give yourself everything you've ever wanted in life.", "author": "Unknown"},
+    {"text": "If you want to live a happy life, tie it to a goal, not to people or things.",
+     "author": "Albert Einstein"},
+    {"text": "What lies behind us and what lies before us are tiny matters compared to what lies within us.",
+     "author": "Ralph Waldo Emerson"},
+    {"text": "The best time to plant a tree was 20 years ago. The second best time is now.",
+     "author": "Chinese Proverb"},
+    {"text": "Your limitation—it's only your imagination.", "author": "Unknown"},
+    {"text": "Push yourself, because no one else is going to do it for you.", "author": "Unknown"},
+    {"text": "Great things never come from comfort zones.", "author": "Unknown"},
+    {"text": "Dream it. Wish it. Do it.", "author": "Unknown"},
+    {"text": "Success doesn't just find you. You have to go out and get it.", "author": "Unknown"},
+    {"text": "The harder you work for something, the greater you'll feel when you achieve it.", "author": "Unknown"},
+    {"text": "Dream bigger. Do bigger.", "author": "Unknown"},
+    {"text": "Don't stop when you're tired. Stop when you're done.", "author": "Unknown"},
+    {"text": "Wake up with determination. Go to bed with satisfaction.", "author": "Unknown"},
+    {"text": "Do something today that your future self will thank you for.", "author": "Sean Patrick Flanery"},
+    {"text": "Little things make big days.", "author": "Unknown"},
+    {"text": "It's going to be hard, but hard does not mean impossible.", "author": "Unknown"},
+    {"text": "Don't wait for opportunity. Create it.", "author": "Unknown"},
+    {"text": "Sometimes we're tested not to show our weaknesses, but to discover our strengths.", "author": "Unknown"},
+    {"text": "The key to success is to focus on goals, not obstacles.", "author": "Unknown"},
+    {"text": "Dream it. Believe it. Build it.", "author": "Unknown"}
+]
 
-# Fonction objectif pour la minimisation
-def objective(params, Xa_values, D_AB_exp, λ_a, λ_b, q_a, q_b, D_AB0, D_BA0, T):
-    a_AB, a_BA = params
-    D_AB_calculated = calculate_D_AB(Xa_values, a_AB, a_BA, λ_a, λ_b, q_a, q_b, D_AB0, D_BA0, T)
-    return np.sum((D_AB_calculated - D_AB_exp)**2)
+
+def get_random_quote():
+    """Get a random motivational quote"""
+    return random.choice(QUOTES)
+
+
+def get_daily_quote():
+    """Get a consistent quote for today (same quote all day)"""
+    # Use today's date as seed for consistent daily quote
+    today = datetime.now().strftime('%Y-%m-%d')
+    random.seed(today)
+    quote = random.choice(QUOTES)
+    random.seed()  # Reset seed
+    return quote
+
 
 @app.route('/')
-def input_data():
-    return render_template('index.html')
+def home():
+    daily_quote = get_daily_quote()
+    return f'''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>💪 Daily Motivation</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+            * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+            body {{ 
+                font-family: 'Georgia', serif;
+                background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
+                background-size: 400% 400%;
+                animation: gradientShift 15s ease infinite;
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                padding: 20px;
+            }}
 
-@app.route('/calculate', methods=['POST'])
-def calculate():
-    if request.method == 'POST':
-        D_AB_exp = float(request.form['D_AB_exp'])
-        T = float(request.form['T'])
-        Xa = float(request.form['Xa'])
-        λ_a = eval(request.form['λ_a'])
-        λ_b = eval(request.form['λ_b'])
-        q_a = float(request.form['q_a'])
-        q_b = float(request.form['q_b'])
-        D_AB0 = float(request.form['D_AB0'])
-        D_BA0 = float(request.form['D_BA0'])
-        
-        # Paramètres initiaux
-        params_initial = [0, 0]
+            @keyframes gradientShift {{
+                0% {{ background-position: 0% 50%; }}
+                50% {{ background-position: 100% 50%; }}
+                100% {{ background-position: 0% 50%; }}
+            }}
 
-        # Tolerance
-        tolerance = 1e-12
+            .container {{
+                max-width: 800px;
+                text-align: center;
+                background: rgba(255, 255, 255, 0.1);
+                padding: 60px 40px;
+                border-radius: 20px;
+                backdrop-filter: blur(10px);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            }}
 
-        # Nombre maximal d'itérations
-        max_iterations = 1000
-        iteration = 0
+            h1 {{
+                font-size: 3em;
+                margin-bottom: 40px;
+                font-weight: 300;
+                text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            }}
 
-        # Temps de départ
-        start_time = time.time()
+            .quote-container {{
+                margin: 40px 0;
+                padding: 40px 20px;
+                background: rgba(255, 255, 255, 0.1);
+                border-radius: 15px;
+                border-left: 5px solid rgba(255, 255, 255, 0.5);
+                transition: transform 0.3s ease;
+            }}
 
-        # Boucle d'ajustement des paramètres
-        while iteration < max_iterations:
-            # Minimisation de l'erreur
-            result = minimize(objective, params_initial, args=(Xa, D_AB_exp, λ_a, λ_b, q_a, q_b, D_AB0, D_BA0, T), method='Nelder-Mead')
-            # Paramètres optimisés
-            a_AB_opt, a_BA_opt = result.x
-            # Calcul de D_AB avec les paramètres optimisés
-            D_AB_opt = calculate_D_AB(Xa, a_AB_opt, a_BA_opt, λ_a, λ_b, q_a, q_b, D_AB0, D_BA0, T)
-            # Calcul de l'erreur
-            error = np.abs(D_AB_opt - D_AB_exp)
-            # Vérifier si la différence entre les paramètres optimisés est inférieure à la tolérance
-            if np.max(np.abs(np.array(params_initial) - np.array([a_AB_opt, a_BA_opt]))) < tolerance:
-                break
-            # Mise à jour des paramètres initiaux
-            params_initial = [a_AB_opt, a_BA_opt]
-            # Incrémentation du nombre d'itérations
-            iteration += 1
+            .quote-container:hover {{
+                transform: translateY(-5px);
+            }}
 
-        # Temps d'exécution
-        execution_time = time.time() - start_time
+            .quote-text {{
+                font-size: 1.8em;
+                line-height: 1.4;
+                margin-bottom: 20px;
+                font-style: italic;
+                text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+            }}
 
-        # Générer la courbe
-        Xa_values = np.linspace(0, 0.7, 100)  # Fraction molaire de A
-        D_AB_values = calculate_D_AB(Xa_values, a_AB_opt, a_BA_opt, λ_a, λ_b, q_a, q_b, D_AB0, D_BA0, T)
-        plt.plot(Xa_values, D_AB_values)
-        plt.xlabel('Fraction molaire de A')
-        plt.ylabel('Coefficient de diffusion (cm^2/s)')
-        plt.title('Variation du coefficient de diffusion en fonction du fraction molaire')
-        plt.grid(True)
-        
-        # Convertir le graphique en une représentation base64
-        buffer = io.BytesIO()
-        plt.savefig(buffer, format='png')
-        buffer.seek(0)
-        graph = base64.b64encode(buffer.getvalue()).decode()
-        plt.close()
+            .quote-author {{
+                font-size: 1.2em;
+                opacity: 0.9;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }}
 
-        # Affichage des résultats
-        return render_template('result.html', a_AB_opt=a_AB_opt, a_BA_opt=a_BA_opt, D_AB_opt=D_AB_opt, error=error, iteration=iteration, execution_time=execution_time, graph=graph)
+            .buttons {{
+                margin-top: 40px;
+                display: flex;
+                gap: 20px;
+                justify-content: center;
+                flex-wrap: wrap;
+            }}
+
+            .btn {{
+                padding: 15px 30px;
+                background: rgba(255, 255, 255, 0.2);
+                color: white;
+                text-decoration: none;
+                border-radius: 50px;
+                font-size: 1.1em;
+                font-weight: 600;
+                border: 2px solid rgba(255, 255, 255, 0.3);
+                transition: all 0.3s ease;
+                cursor: pointer;
+                display: inline-block;
+            }}
+
+            .btn:hover {{
+                background: rgba(255, 255, 255, 0.3);
+                transform: translateY(-2px);
+                box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            }}
+
+            .btn-primary {{
+                background: rgba(255, 255, 255, 0.3);
+                border-color: rgba(255, 255, 255, 0.5);
+            }}
+
+            .daily-label {{
+                display: inline-block;
+                background: rgba(255, 255, 255, 0.2);
+                padding: 8px 16px;
+                border-radius: 20px;
+                font-size: 0.9em;
+                margin-bottom: 20px;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                font-weight: 600;
+            }}
+
+            .footer {{
+                margin-top: 40px;
+                opacity: 0.8;
+                font-size: 0.9em;
+            }}
+
+            @media (max-width: 768px) {{
+                .container {{ padding: 40px 20px; }}
+                h1 {{ font-size: 2.2em; }}
+                .quote-text {{ font-size: 1.4em; }}
+                .buttons {{ flex-direction: column; align-items: center; }}
+                .btn {{ width: 200px; }}
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>💪 Daily Motivation</h1>
+
+            <div class="daily-label">✨ Quote of the Day</div>
+
+            <div class="quote-container" id="quote-container">
+                <div class="quote-text" id="quote-text">"{daily_quote['text']}"</div>
+                <div class="quote-author" id="quote-author">— {daily_quote['author']}</div>
+            </div>
+
+            <div class="buttons">
+                <button class="btn btn-primary" onclick="getNewQuote()">🎲 Random Quote</button>
+                <a href="/daily" class="btn">📅 Daily Quote</a>
+                <a href="/api/quote" class="btn">🔗 API</a>
+            </div>
+
+            <div class="footer">
+                <p>Start your day with inspiration • Share the motivation</p>
+            </div>
+        </div>
+
+        <script>
+            function getNewQuote() {{
+                fetch('/api/random')
+                .then(response => response.json())
+                .then(quote => {{
+                    document.getElementById('quote-text').innerHTML = `"${{quote.text}}"`;
+                    document.getElementById('quote-author').innerHTML = `— ${{quote.author}}`;
+
+                    // Add a little animation
+                    const container = document.getElementById('quote-container');
+                    container.style.opacity = '0.5';
+                    container.style.transform = 'scale(0.95)';
+
+                    setTimeout(() => {{
+                        container.style.opacity = '1';
+                        container.style.transform = 'scale(1)';
+                    }}, 150);
+                }})
+                .catch(error => console.error('Error:', error));
+            }}
+
+            // Optional: Get new quote every 30 seconds
+            // setInterval(getNewQuote, 30000);
+        </script>
+    </body>
+    </html>
+    '''
+
+
+@app.route('/daily')
+def daily():
+    """Show the consistent daily quote"""
+    return home()
+
+
+@app.route('/api/quote')
+def api_quote():
+    """API endpoint that returns the daily quote"""
+    return jsonify(get_daily_quote())
+
+
+@app.route('/api/random')
+def api_random():
+    """API endpoint that returns a random quote"""
+    return jsonify(get_random_quote())
+
+
+@app.route('/api/all')
+def api_all():
+    """API endpoint that returns all quotes"""
+    return jsonify(QUOTES)
+
 
 if __name__ == '__main__':
     app.run(debug=True)
