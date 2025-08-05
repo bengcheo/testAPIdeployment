@@ -1,2 +1,2 @@
 # Sentiment-Analysis-API
-A simple Sentiment Analysis API in FastAPI.
+A simple OCR reader written with the aid of the pytessaract library.
